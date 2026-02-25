@@ -1,0 +1,31 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "nordic-power-terminal"
+version = "0.1.0"
+description = "Nordic Power Quant & Risk Terminal"
+requires-python = ">=3.11"
+dependencies = [
+  "pandas>=2.2",
+  "numpy>=1.26",
+  "duckdb>=1.0",
+  "pyarrow>=16.0",
+  "typer>=0.12",
+  "rich>=13.7",
+  "requests>=2.32",
+  "pytz>=2024.1",
+]
+
+[project.optional-dependencies]
+dev = [
+  "pytest>=8.2",
+  "ruff>=0.5",
+]
+
+[project.scripts]
+npt = "npt.cli:app"
+
+[tool.setuptools]
+package-dir = {"" = "src"}
