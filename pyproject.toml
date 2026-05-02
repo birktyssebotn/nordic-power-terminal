@@ -6,6 +6,8 @@ build-backend = "setuptools.build_meta"
 name = "nordic-power-terminal"
 version = "0.1.0"
 description = "Nordic Power Quant & Risk Terminal"
+readme = "README.md"
+license = { text = "MIT" }
 requires-python = ">=3.11"
 dependencies = [
   "pandas>=2.2",
@@ -28,4 +30,19 @@ dev = [
 npt = "npt.cli:app"
 
 [tool.setuptools]
-package-dir = {"" = "src"}
+package-dir = { "" = "src" }
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-v --tb=short"
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501"]
+
+[tool.ruff.lint.isort]
+known-first-party = ["npt"]
