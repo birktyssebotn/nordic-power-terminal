@@ -8,7 +8,6 @@ Launch with:
 from __future__ import annotations
 
 from datetime import date, timedelta
-from pathlib import Path
 
 import pandas as pd
 import plotly.express as px
@@ -24,9 +23,25 @@ from npt.settings import Settings
 
 st.set_page_config(
     page_title="Nordic Power Terminal",
-    page_icon="⚡",
     layout="wide",
     initial_sidebar_state="expanded",
+)
+
+# Inject Georgia serif font and tighten a few spacing details
+st.markdown(
+    """
+    <style>
+    html, body, [class*="st-"], .stMarkdown, .stMetric,
+    .stDataFrame, .stCaption, .stAlert, button, label,
+    input, select, textarea {
+        font-family: Georgia, "Times New Roman", Times, serif !important;
+    }
+    h1, h2, h3, h4, h5, h6 {
+        font-family: Georgia, "Times New Roman", Times, serif !important;
+    }
+    </style>
+    """,
+    unsafe_allow_html=True,
 )
 
 ZONE_COLOURS = {
@@ -62,11 +77,16 @@ def load_summary() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=300)
-def load_prices(zones: list[str], start: date, end: date) -> pd.DataFrame:
-    df = get_store().query_prices(zones=zones, start=start, end=end)
+def load_prices(zones: tuple[str, ...], start: date, end: date) -> pd.DataFrame:
+    df = get_store().query_prices(zones=list(zones), start=start, end=end)
     if df.empty:
         return df
     df["time_start"] = pd.to_datetime(df["time_start"], utc=True)
+    df["time_utc"] = df["time_start"].dt.tz_convert("UTC")
+    df["hour"] = df["time_utc"].dt.hour
+    df["day_of_week"] = df["time_utc"].dt.day_name()
+    df["date"] = df["time_utc"].dt.date
+    df["zone_label"] = df["zone"].map(ZONE_NAMES)
     return df
 
 
@@ -78,7 +98,7 @@ st.sidebar.image(
     "https://flagcdn.com/w80/no.png",
     width=48,
 )
-st.sidebar.title("⚡ Nordic Power Terminal")
+st.sidebar.title("Nordic Power Terminal")
 st.sidebar.caption("Hourly spot prices · NO1–NO5 · Nord Pool")
 st.sidebar.divider()
 
@@ -87,8 +107,7 @@ summary = load_summary()
 if summary.empty:
     st.error(
         "**No data found.** Run `npt ingest-prices --start YYYY-MM-DD --end YYYY-MM-DD` "
-        "from the terminal to populate the database, then refresh this page.",
-        icon="🗄️",
+        "from the terminal to populate the database, then refresh this page."
     )
     st.stop()
 
@@ -105,9 +124,16 @@ selected_zones = st.sidebar.multiselect(
     format_func=lambda z: ZONE_NAMES[z],
 )
 
-default_start = max(db_min, db_max - timedelta(days=90))
+# Default end to the last date all selected zones share data
+sel_summary = summary[summary["zone"].isin(selected_zones)]
+if not sel_summary.empty:
+    default_end = pd.to_datetime(sel_summary["last_obs"]).min().date()
+else:
+    default_end = db_max
+
+default_start = max(db_min, default_end - timedelta(days=90))
 date_start = st.sidebar.date_input("From", value=default_start, min_value=db_min, max_value=db_max)
-date_end = st.sidebar.date_input("To", value=db_max, min_value=db_min, max_value=db_max)
+date_end = st.sidebar.date_input("To", value=default_end, min_value=db_min, max_value=db_max)
 
 if date_start > date_end:
     st.sidebar.error("'From' must be before 'To'.")
@@ -125,27 +151,24 @@ st.sidebar.caption("© Birk Tyssebotn · MIT Licence")
 # ---------------------------------------------------------------------------
 
 with st.spinner("Loading prices…"):
-    df = load_prices(selected_zones, date_start, date_end)
+    df = load_prices(tuple(selected_zones), date_start, date_end)
 
 if df.empty:
     st.warning("No price data for the selected zones and date range.")
     st.stop()
 
-df["time_utc"] = df["time_start"].dt.tz_convert("UTC")
-df["hour"] = df["time_utc"].dt.hour
-df["day_of_week"] = df["time_utc"].dt.day_name()
-df["date"] = df["time_utc"].dt.date
-df["zone_label"] = df["zone"].map(ZONE_NAMES)
-
 # ---------------------------------------------------------------------------
 # KPI row
 # ---------------------------------------------------------------------------
 
-st.markdown("## ⚡ Nordic Power Terminal")
+st.markdown("## Nordic Power Terminal")
 
 cols = st.columns(len(selected_zones))
 for col, zone in zip(cols, selected_zones):
     zone_df = df[df["zone"] == zone]
+    if zone_df.empty:
+        col.metric(label=ZONE_NAMES[zone], value="No data")
+        continue
     latest = zone_df.sort_values("time_utc").iloc[-1]
     avg = zone_df["nok_per_kwh"].mean()
     col.metric(
@@ -162,7 +185,7 @@ st.divider()
 # ---------------------------------------------------------------------------
 
 tab_prices, tab_analytics, tab_backtest, tab_data = st.tabs(
-    ["📈 Prices", "🔍 Analytics", "🎯 Backtest", "🗄️ Raw data"]
+    ["Prices", "Analytics", "Backtest", "Raw data"]
 )
 
 # ── Tab 1: Prices ──────────────────────────────────────────────────────────
@@ -208,7 +231,7 @@ with tab_prices:
         margin=dict(t=20, b=20),
         height=420,
     )
-    st.plotly_chart(fig, use_container_width=True)
+    st.plotly_chart(fig, width="stretch")
 
     # Zone spread
     if len(selected_zones) > 1:
@@ -223,7 +246,7 @@ with tab_prices:
             color_discrete_sequence=["#8172B2"],
         )
         fig2.update_layout(margin=dict(t=10, b=20), height=250)
-        st.plotly_chart(fig2, use_container_width=True)
+        st.plotly_chart(fig2, width="stretch")
 
 # ── Tab 2: Analytics ───────────────────────────────────────────────────────
 
@@ -248,7 +271,7 @@ with tab_analytics:
             markers=True,
         )
         fig3.update_layout(margin=dict(t=10, b=10), height=340)
-        st.plotly_chart(fig3, use_container_width=True)
+        st.plotly_chart(fig3, width="stretch")
 
     with col_right:
         st.subheader("Price distribution by zone")
@@ -261,9 +284,9 @@ with tab_analytics:
             labels={"nok_per_kwh": "NOK/kWh", "zone_label": "Zone"},
         )
         fig4.update_layout(showlegend=False, margin=dict(t=10, b=10), height=340)
-        st.plotly_chart(fig4, use_container_width=True)
+        st.plotly_chart(fig4, width="stretch")
 
-    st.subheader("Weekly heatmap — avg price by hour & day")
+    st.subheader("Weekly heatmap — avg price by hour and day")
     heatmap_zone = st.selectbox(
         "Zone", options=selected_zones, format_func=lambda z: ZONE_NAMES[z], key="heatmap_zone"
     )
@@ -284,7 +307,7 @@ with tab_analytics:
         aspect="auto",
     )
     fig5.update_layout(margin=dict(t=10, b=10), height=280)
-    st.plotly_chart(fig5, use_container_width=True)
+    st.plotly_chart(fig5, width="stretch")
 
     st.subheader("Descriptive statistics")
     stats = (
@@ -302,14 +325,14 @@ with tab_analytics:
         .round(4)
         .reset_index()
     )
-    st.dataframe(stats, use_container_width=True, hide_index=True)
+    st.dataframe(stats, width="stretch", hide_index=True)
 
 # ── Tab 3: Backtest ────────────────────────────────────────────────────────
 
 with tab_backtest:
-    st.subheader("Seasonal-naïve walk-forward backtest")
+    st.subheader("Seasonal-naive walk-forward backtest")
     st.caption(
-        "Forecast: price at hour *t* = price at hour *t − 168* (same hour, 7 days prior). "
+        "Forecast: price at hour t = price at hour t minus 168 (same hour, 7 days prior). "
         "Evaluated one day ahead at a time with no look-ahead."
     )
 
@@ -317,7 +340,7 @@ with tab_backtest:
         "Zone to backtest", options=selected_zones, format_func=lambda z: ZONE_NAMES[z]
     )
 
-    run_bt = st.button("▶ Run backtest", type="primary")
+    run_bt = st.button("Run backtest", type="primary")
 
     if run_bt:
         from npt.backtest.walk_forward import mae_rmse, walk_forward_daily_seasonal_naive
@@ -355,7 +378,7 @@ with tab_backtest:
                 go.Scatter(
                     x=preds_plot["Time"],
                     y=preds_plot["Forecast"],
-                    name="Forecast (seasonal naïve)",
+                    name="Forecast (seasonal naive)",
                     line=dict(color="#aaaaaa", width=1.5, dash="dash"),
                 )
             )
@@ -367,7 +390,7 @@ with tab_backtest:
                 height=400,
                 title="Actual vs forecast — last 14 days of evaluation window",
             )
-            st.plotly_chart(fig6, use_container_width=True)
+            st.plotly_chart(fig6, width="stretch")
 
             # Residuals
             preds_all = result.preds.copy()
@@ -381,9 +404,9 @@ with tab_backtest:
                 color_discrete_sequence=[ZONE_COLOURS.get(bt_zone, "#4C72B0")],
             )
             fig7.update_layout(margin=dict(t=40, b=20), height=280)
-            st.plotly_chart(fig7, use_container_width=True)
+            st.plotly_chart(fig7, width="stretch")
     else:
-        st.info("Select a zone and click **▶ Run backtest** to evaluate the model.")
+        st.info("Select a zone and click **Run backtest** to evaluate the model.")
 
 # ── Tab 4: Raw data ────────────────────────────────────────────────────────
 
@@ -407,11 +430,11 @@ with tab_data:
     )
 
     st.caption(f"{len(display_df):,} rows · {date_start} → {date_end} · zones: {', '.join(selected_zones)}")
-    st.dataframe(display_df, use_container_width=True, height=480)
+    st.dataframe(display_df, width="stretch", height=480)
 
     csv = display_df.to_csv(index=False).encode("utf-8")
     st.download_button(
-        label="⬇ Download as CSV",
+        label="Download as CSV",
         data=csv,
         file_name=f"npt_prices_{'_'.join(selected_zones)}_{date_start}_{date_end}.csv",
         mime="text/csv",
@@ -419,4 +442,4 @@ with tab_data:
 
     st.divider()
     st.subheader("Database summary")
-    st.dataframe(summary, use_container_width=True, hide_index=True)
+    st.dataframe(summary, width="stretch", hide_index=True)
