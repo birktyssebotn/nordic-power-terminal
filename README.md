@@ -1,18 +1,34 @@
 # Nordic Power Terminal
 
-A data engineering and quantitative analysis project for the Nordic electricity market. The tool ingests hourly spot prices for all five Norwegian bidding zones (NO1–NO5) from the Nord Pool exchange, stores them in a local DuckDB database, and exposes them through both a command-line interface and an interactive Streamlit dashboard.
+A data engineering and quantitative analysis project for the Nordic electricity market.
+The tool ingests hourly spot prices for all five Norwegian bidding zones (NO1–NO5)
+from the Nord Pool exchange, stores them in a local DuckDB database, and presents them
+through both a command-line interface and an interactive Streamlit dashboard.
 
 Built with Python 3.11, DuckDB, Pandas, Plotly, and Streamlit.
 
 ---
 
+![Analytics tab — hour-of-day price profile, distribution by zone, and weekly heatmap](docs/screenshot-analytics.png)
+
+![Prices tab — daily average spot prices across all five Norwegian bidding zones](docs/screenshot-prices.png)
+
+![Backtest tab — seasonal-naive walk-forward evaluation with error distribution](docs/screenshot-backtest.png)
+
+---
+
 ## Background
 
-The Nordic power market is one of the world's most liquid electricity exchanges. Norwegian prices vary significantly across five bidding zones due to hydropower reservoir constraints, inter-regional transmission bottlenecks, and interconnectors with continental Europe and the UK. This price variation makes it a rich domain for time-series analysis, forecasting, and quantitative modelling.
+The Nordic power market is one of the world's most liquid electricity exchanges.
+Norwegian prices vary significantly across five bidding zones due to hydropower reservoir
+constraints, inter-regional transmission bottlenecks, and interconnectors with continental
+Europe and the UK. This price variation makes it a rich domain for time-series analysis,
+forecasting, and quantitative modelling.
 
 ---
 
 ## Architecture
+
 
 ```
 hvakosterstrommen.no API
